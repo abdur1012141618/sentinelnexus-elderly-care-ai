@@ -1,0 +1,83 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organisation {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  residents Resident[]
+  profiles  Profile[]
+  @@map("organisations")
+}
+
+model Profile {
+  id       String  @id @default(uuid())
+  userId   String  @unique @map("user_id")
+  orgId    String  @map("org_id")
+  fullName String? @map("full_name")
+  role     String  @default("staff")
+  org      Organisation @relation(fields: [orgId], references: [id])
+  @@map("profiles")
+}
+
+model Resident {
+  id        String   @id @default(uuid())
+  orgId     String   @map("org_id")
+  name      String
+  room      String?
+  age       Int?
+  gait      String?
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  org       Organisation @relation(fields: [orgId], references: [id])
+  vitals    Vital[]
+  fallChecks FallCheck[]
+  alerts    Alert[]
+  @@map("residents")
+}
+
+model Vital {
+  id          String   @id @default(uuid())
+  residentId  String   @map("resident_id")
+  heartRate   Int?     @map("heart_rate")
+  temperature Float?
+  systolic    Int?     @map("systolic")
+  diastolic   Int?     @map("diastolic")
+  spo2        Int?
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  resident    Resident @relation(fields: [residentId], references: [id])
+  @@map("vitals")
+}
+
+model FallCheck {
+  id          String   @id @default(uuid())
+  residentId  String   @map("resident_id")
+  age         Int
+  confidence  Float
+  gait        String
+  history     String?
+  isFall      Boolean  @map("is_fall")
+  createdAt   DateTime @default(now()) @map("created_at")
+  resident    Resident @relation(fields: [residentId], references: [id])
+  @@map("fall_checks")
+}
+
+model Alert {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  residentId  String?  @map("resident_id")
+  type        String
+  severity    String?
+  isOpen      Boolean  @default(true) @map("is_open")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  resident    Resident? @relation(fields: [residentId], references: [id])
+  @@map("alerts")
+}
