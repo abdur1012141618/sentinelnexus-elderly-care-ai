@@ -186,9 +186,6 @@ app.patch('/api/alerts/:id/acknowledge', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
-
 // --- Fall Check Endpoints ---
 app.post('/api/fall-checks', async (req, res) => {
   const { residentId, age, gait, history } = req.body;
@@ -245,3 +242,6 @@ app.get('/api/fall-checks/:residentId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch fall checks' });
   }
 });
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
