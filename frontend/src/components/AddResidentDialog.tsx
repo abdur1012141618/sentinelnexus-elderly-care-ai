@@ -12,9 +12,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateResident } from '@/hooks/useResidents';
+import { useToast } from '@/hooks/use-toast'; // shadcn toast
 
 export default function AddResidentDialog() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [room, setRoom] = useState('');
@@ -24,15 +26,27 @@ export default function AddResidentDialog() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // আর orgId পাঠানো হচ্ছে না – ব্যাকএন্ড ডিফল্ট অর্গানাইজেশন ব্যবহার করবে
-    await createResident.mutateAsync({
-      name,
-      room: room || null,
-      age: age ? parseInt(age) : null,
-      gait: gait || null,
-    });
-    setOpen(false);
-    setName(''); setRoom(''); setAge(''); setGait('');
+    try {
+      await createResident.mutateAsync({
+        name,
+        room: room || null,
+        age: age ? parseInt(age) : null,
+        gait: gait || null,
+      });
+      toast({
+        title: 'Resident added',
+        description: `${name} has been added successfully.`,
+      });
+      setOpen(false);
+      setName(''); setRoom(''); setAge(''); setGait('');
+    } catch (error: any) {
+      const message = error?.response?.data?.error || error.message || 'An error occurred';
+      toast({
+        title: 'Failed to add resident',
+        description: message,
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
