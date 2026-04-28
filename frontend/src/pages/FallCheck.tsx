@@ -4,6 +4,7 @@ import { useResidents } from '@/hooks/useResidents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import apiClient from '@/api/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface FallCheckResult {
   id: string;
@@ -39,15 +41,18 @@ interface FallCheckResult {
   isFall: boolean;
   createdAt: string;
   residentName?: string;
+  aiExplanation?: string;
 }
 
 export default function FallCheck() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { data: residents } = useResidents();
   const [residentId, setResidentId] = useState('');
   const [age, setAge] = useState('');
   const [gait, setGait] = useState('');
   const [history, setHistory] = useState('');
+  const [useAI, setUseAI] = useState(false);
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<FallCheckResult | null>(null);
   const [pastChecks, setPastChecks] = useState<FallCheckResult[]>([]);
@@ -62,11 +67,7 @@ export default function FallCheck() {
     if (value) {
       try {
         const { data } = await apiClient.get(`/fall-checks/${value}`);
-        const checksWithName = data.map((check: FallCheckResult) => ({
-          ...check,
-          residentName: residents?.find(r => r.id === value)?.name || 'Unknown',
-        }));
-        setPastChecks(checksWithName);
+        setPastChecks(data);
       } catch (err) {
         console.error('Failed to load history', err);
       }
@@ -75,23 +76,27 @@ export default function FallCheck() {
 
   const handleCheck = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!residentId || !age || !gait) return;
+    if (!residentId || !age || !gait) {
+      toast({ title: 'Missing fields', description: 'Please fill all required fields.', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
     try {
-      const { data } = await apiClient.post('/fall-checks', {
+      const endpoint = useAI ? '/ai-fall-check' : '/fall-checks';
+      const { data } = await apiClient.post(endpoint, {
         residentId,
         age: parseInt(age),
         gait,
         history: history || null,
       });
-      const newCheck = {
-        ...data,
-        residentName: selectedResident?.name || 'Unknown',
-      };
-      setLastResult(newCheck);
-      setPastChecks(prev => [newCheck, ...prev]);
-    } catch (err) {
+      const enriched = { ...data, residentName: selectedResident?.name || 'Unknown' };
+      setLastResult(enriched);
+      setPastChecks(prev => [enriched, ...prev]);
+      toast({ title: 'Success', description: `Check completed. Risk: ${(enriched.confidence * 100).toFixed(0)}%` });
+    } catch (err: any) {
       console.error('Fall check failed', err);
+      const message = err?.response?.data?.error || err.message || 'An error occurred';
+      toast({ title: 'Check failed', description: message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -108,6 +113,12 @@ export default function FallCheck() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCheck} className="space-y-4">
+            <div className="flex items-center justify-between border-b pb-4">
+              <Label htmlFor="ai-switch" className="text-sm font-medium cursor-pointer">
+                🧪 Use AI (Ollama) for prediction
+              </Label>
+              <Switch id="ai-switch" checked={useAI} onCheckedChange={setUseAI} />
+            </div>
             <div>
               <Label>{t('fallcheck.resident')}</Label>
               <Select onValueChange={handleResidentChange} value={residentId}>
@@ -145,51 +156,49 @@ export default function FallCheck() {
             </div>
             <div className="flex gap-2">
               <Button type="submit" disabled={loading} className="flex-1">
-                {loading ? t('fallcheck.calculating') : t('fallcheck.runCheck')}
+                {loading ? t('fallcheck.calculating') : useAI ? '🧠 AI Predict' : t('fallcheck.runCheck')}
               </Button>
               {residentId && (
                 <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" type="button" disabled={pastChecks.length === 0}>
-                      {t('fallcheck.historyButton', { count: pastChecks.length })}
+                      📋 History ({pastChecks.length})
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>
-                        {t('fallcheck.historyTitle', { name: selectedResident?.name })}
+                        Previous Fall Checks {selectedResident && `for ${selectedResident.name}`}
                       </DialogTitle>
                       <DialogDescription>
-                        {t('fallcheck.historyDescription')}
+                        History for the selected resident
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-2 py-2">
-                      {pastChecks.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">{t('fallcheck.noHistory')}</p>
-                      ) : (
-                        pastChecks.map(check => (
-                          <div key={check.id} className="flex justify-between items-center border-b pb-2">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <p className="text-sm font-medium">{format(new Date(check.createdAt), 'MMM dd, HH:mm')}</p>
-                                {check.residentName && (
-                                  <Badge variant="outline" className="text-red-500 border-red-300 bg-red-50">
-                                    {check.residentName}
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground">Age {check.age} • {check.gait}</p>
-                              {check.history && <p className="text-xs text-muted-foreground truncate max-w-[200px]">{check.history}</p>}
+                      {pastChecks.map(check => (
+                        <div key={check.id} className="flex justify-between items-center border-b pb-2">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-sm font-medium">{format(new Date(check.createdAt), 'MMM dd, HH:mm')}</p>
+                              {check.residentName && (
+                                <Badge variant="outline" className="text-red-500 border-red-300 bg-red-50">
+                                  {check.residentName}
+                                </Badge>
+                              )}
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm font-semibold">{(check.confidence * 100).toFixed(0)}%</p>
-                              <Badge variant={check.isFall ? 'destructive' : 'default'}>
-                                {check.isFall ? t('fallcheck.high') : t('fallcheck.low')}
-                              </Badge>
-                            </div>
+                            <p className="text-xs text-muted-foreground">Age {check.age} • {check.gait}</p>
+                            {check.aiExplanation && (
+                              <p className="text-xs text-blue-700 bg-blue-50 p-1 rounded mt-1">{check.aiExplanation}</p>
+                            )}
                           </div>
-                        ))
-                      )}
+                          <div className="text-right">
+                            <p className="text-sm font-semibold">{(check.confidence * 100).toFixed(0)}%</p>
+                            <Badge variant={check.isFall ? 'destructive' : 'default'}>
+                              {check.isFall ? 'High' : 'Low'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -202,19 +211,25 @@ export default function FallCheck() {
       {lastResult && (
         <Card>
           <CardHeader>
-            <CardTitle>{t('fallcheck.lastCheckResult')}</CardTitle>
+            <CardTitle>Last Check Result</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">{t('fallcheck.riskScore')}:</span>
+              <span className="text-sm font-medium">Risk Score:</span>
               <span className="text-lg font-bold">{(lastResult.confidence * 100).toFixed(0)}%</span>
+              {useAI && <Badge variant="outline" className="text-blue-600 border-blue-300">AI</Badge>}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">{t('fallcheck.verdict')}:</span>
+              <span className="text-sm font-medium">Verdict:</span>
               <Badge variant={lastResult.isFall ? 'destructive' : 'default'}>
-                {lastResult.isFall ? t('fallcheck.highRisk') : t('fallcheck.lowRisk')}
+                {lastResult.isFall ? '⚠️ HIGH FALL RISK' : '✅ LOW RISK'}
               </Badge>
             </div>
+            {lastResult.aiExplanation && (
+              <p className="text-sm bg-blue-50 p-3 rounded-lg border border-blue-200 text-blue-900">
+                🧠 {lastResult.aiExplanation}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

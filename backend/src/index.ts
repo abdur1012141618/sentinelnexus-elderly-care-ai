@@ -23,7 +23,7 @@ async function getDefaultOrgId() {
   return org.id;
 }
 
-// --- Residents Endpoints ---
+// --- Residents ---
 app.get('/api/residents', async (_, res) => {
   try {
     const residents = await prisma.resident.findMany();
@@ -64,7 +64,7 @@ app.post('/api/residents', async (req, res) => {
   }
 });
 
-// --- Vitals Endpoints ---
+// --- Vitals ---
 app.get('/api/vitals', async (req, res) => {
   try {
     const vitals = await prisma.vital.findMany({
@@ -112,7 +112,6 @@ app.post('/api/vitals', async (req, res) => {
       },
     });
 
-    // ---- স্বয়ংক্রিয় অ্যালার্ট চেক ----
     const alerts: Array<{ type: string; severity: string; message: string }> = [];
     if (heartRate && (heartRate < 50 || heartRate > 120)) {
       alerts.push({ type: 'heart_rate', severity: 'warning', message: `Heart rate: ${heartRate} bpm (normal 50-120)` });
@@ -133,7 +132,6 @@ app.post('/api/vitals', async (req, res) => {
       alerts.push({ type: 'spo2', severity: 'warning', message: `SpO₂: ${spo2}% (below 95%)` });
     }
 
-    // প্রতিটি Alert তৈরি ও সংরক্ষণ
     if (alerts.length > 0) {
       const orgId = await getDefaultOrgId();
       await Promise.all(alerts.map(alert =>
@@ -148,7 +146,7 @@ app.post('/api/vitals', async (req, res) => {
         })
       ));
     }
-    // -------------------------------
+
     res.status(201).json(vital);
   } catch (error) {
     console.error(error);
@@ -156,7 +154,7 @@ app.post('/api/vitals', async (req, res) => {
   }
 });
 
-// --- Alerts Endpoints ---
+// --- Alerts ---
 app.get('/api/alerts', async (req, res) => {
   try {
     const alerts = await prisma.alert.findMany({
@@ -186,14 +184,13 @@ app.patch('/api/alerts/:id/acknowledge', async (req, res) => {
   }
 });
 
-// --- Fall Check Endpoints ---
+// --- Fall Checks (Rule-based) ---
 app.post('/api/fall-checks', async (req, res) => {
   const { residentId, age, gait, history } = req.body;
   if (!residentId || !age || !gait) {
     return res.status(400).json({ error: 'residentId, age, and gait are required' });
   }
 
-  // সরল ফল রিস্ক লজিক
   let score = 0;
   const ageNum = parseInt(age);
   if (ageNum >= 80) score += 0.3;
@@ -207,7 +204,7 @@ app.post('/api/fall-checks', async (req, res) => {
 
   if (history && history.toLowerCase().includes('fall')) score += 0.2;
 
-  const isFall = score >= 0.5; // 0.5 বা তার বেশি হলে রিস্ক ধরা হবে
+  const isFall = score >= 0.5;
 
   try {
     const fallCheck = await prisma.fallCheck.create({
@@ -227,7 +224,6 @@ app.post('/api/fall-checks', async (req, res) => {
   }
 });
 
-// নির্দিষ্ট রেসিডেন্টের ফল চেক হিস্ট্রি
 app.get('/api/fall-checks/:residentId', async (req, res) => {
   const { residentId } = req.params;
   try {
@@ -240,6 +236,60 @@ app.get('/api/fall-checks/:residentId', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch fall checks' });
+  }
+});
+
+// ✨ AI-Powered Fall Check (Ollama)
+app.post('/api/ai-fall-check', async (req, res) => {
+  const { residentId, age, gait, history } = req.body;
+  if (!residentId || !age || !gait) {
+    return res.status(400).json({ error: 'residentId, age, and gait are required' });
+  }
+
+  const prompt = `You are a medical AI assistant specialized in fall risk assessment for elderly patients.
+Based on the following data, provide a numeric risk score (between 0 and 1, where 0 is no risk and 1 is extreme risk), a verdict (HIGH or LOW), and a brief explanation (one sentence).
+Respond ONLY with a valid JSON object with keys "score", "verdict", "explanation".
+
+Data:
+- Age: ${age}
+- Gait: ${gait}
+- Medical History: ${history || 'None'}
+
+Example output: {"score":0.65,"verdict":"HIGH","explanation":"High risk due to advanced age and unsteady gait."}`;
+
+  try {
+    const response = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3.2:1b',
+        prompt: prompt,
+        stream: false,
+        format: 'json',
+      }),
+    });
+
+    const result = await response.json();
+    const parsed = JSON.parse(result.response);
+
+    const fallCheck = await prisma.fallCheck.create({
+      data: {
+        residentId,
+        age: parseInt(age),
+        confidence: parsed.score,
+        gait,
+        history: history || null,
+        isFall: parsed.verdict === 'HIGH',
+      },
+    });
+
+    res.status(201).json({
+      ...fallCheck,
+      aiExplanation: parsed.explanation,
+    });
+  } catch (error) {
+    console.error('AI Fall Check failed:', error);
+    res.status(500).json({ error: 'AI assessment failed. Ensure Ollama is running locally.' });
   }
 });
 
