@@ -13,8 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateResident } from '@/hooks/useResidents';
 
-const ORGANISATION_ID = 'cf59bd9b-807d-4776-80e1-1d844c5361f9'; // তোমার Organisation ID
-
 export default function AddResidentDialog() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -26,12 +24,12 @@ export default function AddResidentDialog() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // আর orgId পাঠানো হচ্ছে না – ব্যাকএন্ড ডিফল্ট অর্গানাইজেশন ব্যবহার করবে
     await createResident.mutateAsync({
       name,
       room: room || null,
       age: age ? parseInt(age) : null,
       gait: gait || null,
-      orgId: ORGANISATION_ID,
     });
     setOpen(false);
     setName(''); setRoom(''); setAge(''); setGait('');

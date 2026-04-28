@@ -22,6 +22,7 @@ export const useResidents = () => {
   });
 };
 
+// নতুন রেসিডেন্ট তৈরির জন্য mutation – আর orgId পাঠাবে না
 export const useCreateResident = () => {
   const queryClient = useQueryClient();
   return useMutation({

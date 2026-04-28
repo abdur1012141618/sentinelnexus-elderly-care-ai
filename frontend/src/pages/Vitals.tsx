@@ -53,6 +53,7 @@ export default function Vitals() {
       systolic: systolic ? parseInt(systolic) : null,
       diastolic: diastolic ? parseInt(diastolic) : null,
       spo2: spo2 ? parseInt(spo2) : null,
+      notes: null, // টাইপের সাথে মিলিয়ে রাখার জন্য null যোগ করা হয়েছে
     });
     setDialogOpen(false);
     setHeartRate(''); setTemperature(''); setSystolic(''); setDiastolic(''); setSpo2('');
