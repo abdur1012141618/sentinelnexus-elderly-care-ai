@@ -65,7 +65,6 @@ app.post('/api/residents', async (req, res) => {
 });
 
 // --- Vitals Endpoints ---
-// সব ভাইটালস রেকর্ড
 app.get('/api/vitals', async (req, res) => {
   try {
     const vitals = await prisma.vital.findMany({
@@ -80,7 +79,6 @@ app.get('/api/vitals', async (req, res) => {
   }
 });
 
-// নির্দিষ্ট রেসিডেন্টের ভাইটালস
 app.get('/api/vitals/:residentId', async (req, res) => {
   const { residentId } = req.params;
   try {
@@ -96,7 +94,6 @@ app.get('/api/vitals/:residentId', async (req, res) => {
   }
 });
 
-// নতুন ভাইটাল তৈরি
 app.post('/api/vitals', async (req, res) => {
   const { residentId, heartRate, temperature, systolic, diastolic, spo2, notes } = req.body;
   if (!residentId) {
@@ -114,10 +111,78 @@ app.post('/api/vitals', async (req, res) => {
         notes: notes || null,
       },
     });
+
+    // ---- স্বয়ংক্রিয় অ্যালার্ট চেক ----
+    const alerts: Array<{ type: string; severity: string; message: string }> = [];
+    if (heartRate && (heartRate < 50 || heartRate > 120)) {
+      alerts.push({ type: 'heart_rate', severity: 'warning', message: `Heart rate: ${heartRate} bpm (normal 50-120)` });
+    }
+    if (temperature && (temperature < 36.1 || temperature > 37.8)) {
+      alerts.push({ type: 'temperature', severity: 'warning', message: `Temperature: ${temperature}°C (normal 36.1-37.8)` });
+    }
+    if (systolic && diastolic) {
+      if (systolic > 180 || diastolic > 110) {
+        alerts.push({ type: 'blood_pressure', severity: 'critical', message: `BP: ${systolic}/${diastolic} mmHg (critical)` });
+      } else if (systolic > 140 || diastolic > 90) {
+        alerts.push({ type: 'blood_pressure', severity: 'warning', message: `BP: ${systolic}/${diastolic} mmHg (high)` });
+      }
+    }
+    if (spo2 && spo2 < 90) {
+      alerts.push({ type: 'spo2', severity: 'critical', message: `SpO₂: ${spo2}% (below 90%)` });
+    } else if (spo2 && spo2 < 95) {
+      alerts.push({ type: 'spo2', severity: 'warning', message: `SpO₂: ${spo2}% (below 95%)` });
+    }
+
+    // প্রতিটি Alert তৈরি ও সংরক্ষণ
+    if (alerts.length > 0) {
+      const orgId = await getDefaultOrgId();
+      await Promise.all(alerts.map(alert =>
+        prisma.alert.create({
+          data: {
+            orgId,
+            residentId,
+            type: alert.type,
+            severity: alert.severity,
+            metadata: { message: alert.message },
+          },
+        })
+      ));
+    }
+    // -------------------------------
     res.status(201).json(vital);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to create vital record' });
+  }
+});
+
+// --- Alerts Endpoints ---
+app.get('/api/alerts', async (req, res) => {
+  try {
+    const alerts = await prisma.alert.findMany({
+      include: { resident: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+      where: { isOpen: true },
+      take: 50,
+    });
+    res.json(alerts);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch alerts' });
+  }
+});
+
+app.patch('/api/alerts/:id/acknowledge', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const alert = await prisma.alert.update({
+      where: { id },
+      data: { isOpen: false },
+    });
+    res.json(alert);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to acknowledge alert' });
   }
 });
 
