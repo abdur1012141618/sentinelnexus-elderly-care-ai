@@ -188,3 +188,60 @@ app.patch('/api/alerts/:id/acknowledge', async (req, res) => {
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+
+// --- Fall Check Endpoints ---
+app.post('/api/fall-checks', async (req, res) => {
+  const { residentId, age, gait, history } = req.body;
+  if (!residentId || !age || !gait) {
+    return res.status(400).json({ error: 'residentId, age, and gait are required' });
+  }
+
+  // সরল ফল রিস্ক লজিক
+  let score = 0;
+  const ageNum = parseInt(age);
+  if (ageNum >= 80) score += 0.3;
+  else if (ageNum >= 70) score += 0.2;
+  else if (ageNum >= 60) score += 0.1;
+
+  const gaitLower = gait.toLowerCase();
+  if (gaitLower === 'unsteady') score += 0.3;
+  else if (gaitLower === 'shuffling') score += 0.25;
+  else if (gaitLower === 'slow') score += 0.1;
+
+  if (history && history.toLowerCase().includes('fall')) score += 0.2;
+
+  const isFall = score >= 0.5; // 0.5 বা তার বেশি হলে রিস্ক ধরা হবে
+
+  try {
+    const fallCheck = await prisma.fallCheck.create({
+      data: {
+        residentId,
+        age: ageNum,
+        confidence: parseFloat(score.toFixed(2)),
+        gait,
+        history: history || null,
+        isFall,
+      },
+    });
+    res.status(201).json(fallCheck);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create fall check' });
+  }
+});
+
+// নির্দিষ্ট রেসিডেন্টের ফল চেক হিস্ট্রি
+app.get('/api/fall-checks/:residentId', async (req, res) => {
+  const { residentId } = req.params;
+  try {
+    const checks = await prisma.fallCheck.findMany({
+      where: { residentId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+    res.json(checks);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch fall checks' });
+  }
+});
