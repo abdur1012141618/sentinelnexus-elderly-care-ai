@@ -14,10 +14,8 @@ app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 
 // --- Organisation Helper ---
 async function getDefaultOrgId() {
-  // খুঁজে বের করো প্রথম organisation
   let org = await prisma.organisation.findFirst();
   if (!org) {
-    // না থাকলে তৈরি করে দাও
     org = await prisma.organisation.create({
       data: { name: 'Default Organisation' },
     });
@@ -39,12 +37,10 @@ app.get('/api/residents', async (_, res) => {
 app.post('/api/residents', async (req, res) => {
   const { name, room, age, gait, notes, orgId } = req.body;
   try {
-    // orgId দেওয়া থাকলে এবং তা বৈধ ইউআইডি হলে ব্যবহার করো, নাহলে ডিফল্ট নাও
     let finalOrgId = orgId;
     if (!finalOrgId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalOrgId)) {
       finalOrgId = await getDefaultOrgId();
     } else {
-      // নিশ্চিত করো যে এই orgId-র organisation সত্যি আছে
       const orgExists = await prisma.organisation.findUnique({ where: { id: finalOrgId } });
       if (!orgExists) {
         finalOrgId = await getDefaultOrgId();
@@ -65,6 +61,63 @@ app.post('/api/residents', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to create resident' });
+  }
+});
+
+// --- Vitals Endpoints ---
+// সব ভাইটালস রেকর্ড
+app.get('/api/vitals', async (req, res) => {
+  try {
+    const vitals = await prisma.vital.findMany({
+      include: { resident: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.json(vitals);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch vitals' });
+  }
+});
+
+// নির্দিষ্ট রেসিডেন্টের ভাইটালস
+app.get('/api/vitals/:residentId', async (req, res) => {
+  const { residentId } = req.params;
+  try {
+    const vitals = await prisma.vital.findMany({
+      where: { residentId },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
+    res.json(vitals);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch resident vitals' });
+  }
+});
+
+// নতুন ভাইটাল তৈরি
+app.post('/api/vitals', async (req, res) => {
+  const { residentId, heartRate, temperature, systolic, diastolic, spo2, notes } = req.body;
+  if (!residentId) {
+    return res.status(400).json({ error: 'residentId is required' });
+  }
+  try {
+    const vital = await prisma.vital.create({
+      data: {
+        residentId,
+        heartRate: heartRate || null,
+        temperature: temperature || null,
+        systolic: systolic || null,
+        diastolic: diastolic || null,
+        spo2: spo2 || null,
+        notes: notes || null,
+      },
+    });
+    res.status(201).json(vital);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create vital record' });
   }
 });
 
