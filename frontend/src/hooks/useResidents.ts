@@ -11,18 +11,23 @@ interface Resident {
 }
 
 const fetchResidents = async (): Promise<Resident[]> => {
-  const { data } = await apiClient.get('/residents');
-  return data;
+  try {
+    const { data } = await apiClient.get('/residents');
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Failed to fetch residents:', error);
+    return [];
+  }
 };
 
 export const useResidents = () => {
   return useQuery({
     queryKey: ['residents'],
     queryFn: fetchResidents,
+    placeholderData: [],
   });
 };
 
-// নতুন রেসিডেন্ট তৈরির জন্য mutation – আর orgId পাঠাবে না
 export const useCreateResident = () => {
   const queryClient = useQueryClient();
   return useMutation({

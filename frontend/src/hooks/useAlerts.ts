@@ -13,15 +13,23 @@ export interface Alert {
 }
 
 const fetchAlerts = async (): Promise<Alert[]> => {
-  const { data } = await apiClient.get('/alerts');
-  return data;
+  try {
+    const { data } = await apiClient.get('/alerts');
+    // যদি অ্যারে না আসে (যেমন এরর অবজেক্ট), তাহলে খালি অ্যারে ফেরত দিচ্ছি
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Failed to fetch alerts:', error);
+    return [];
+  }
 };
 
 export const useAlerts = () => {
   return useQuery({
     queryKey: ['alerts'],
     queryFn: fetchAlerts,
-    refetchInterval: 30000, // ৩০সেকেন্ড পর পর রিফ্রেশ
+    refetchInterval: 30000,
+    // প্রাথমিক ডেটা হিসেবে খালি অ্যারে দিয়ে দিচ্ছি যাতে ড্যাশ ক্র্যাশ না করে
+    placeholderData: [],
   });
 };
 
