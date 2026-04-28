@@ -19,3 +19,24 @@ app.get('/api/residents', async (_, res) => {
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+
+// Create a new resident
+app.post('/api/residents', async (req, res) => {
+  const { name, room, age, gait, notes, orgId } = req.body;
+  try {
+    const resident = await prisma.resident.create({
+      data: {
+        name,
+        room: room || null,
+        age: age ? parseInt(age) : null,
+        gait: gait || null,
+        notes: notes || null,
+        orgId,
+      },
+    });
+    res.status(201).json(resident);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create resident' });
+  }
+});
