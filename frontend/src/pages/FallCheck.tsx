@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useResidents } from '@/hooks/useResidents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,10 +38,11 @@ interface FallCheckResult {
   history: string | null;
   isFall: boolean;
   createdAt: string;
-  residentName?: string; // ← নতুন ফিল্ড (আমরা লোকালি বসাব)
+  residentName?: string;
 }
 
 export default function FallCheck() {
+  const { t } = useTranslation();
   const { data: residents } = useResidents();
   const [residentId, setResidentId] = useState('');
   const [age, setAge] = useState('');
@@ -60,7 +62,6 @@ export default function FallCheck() {
     if (value) {
       try {
         const { data } = await apiClient.get(`/fall-checks/${value}`);
-        // প্রতিটি চেকের সাথে residentName বসিয়ে দিচ্ছি যাতে পরে দেখাতে পারি
         const checksWithName = data.map((check: FallCheckResult) => ({
           ...check,
           residentName: residents?.find(r => r.id === value)?.name || 'Unknown',
@@ -83,7 +84,6 @@ export default function FallCheck() {
         gait,
         history: history || null,
       });
-      // নতুন চেকেও residentName যোগ করি
       const newCheck = {
         ...data,
         residentName: selectedResident?.name || 'Unknown',
@@ -99,20 +99,20 @@ export default function FallCheck() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">🧠 Fall Risk Prediction</h1>
+      <h1 className="text-2xl font-bold">{t('fallcheck.title')}</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle>Run Fall Check</CardTitle>
-          <CardDescription>Enter assessment parameters</CardDescription>
+          <CardTitle>{t('fallcheck.runFallCheck')}</CardTitle>
+          <CardDescription>{t('fallcheck.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCheck} className="space-y-4">
             <div>
-              <Label>Resident</Label>
+              <Label>{t('fallcheck.resident')}</Label>
               <Select onValueChange={handleResidentChange} value={residentId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a resident" />
+                  <SelectValue placeholder={t('fallcheck.selectResident')} />
                 </SelectTrigger>
                 <SelectContent>
                   {residents?.map(r => (
@@ -122,14 +122,14 @@ export default function FallCheck() {
               </Select>
             </div>
             <div>
-              <Label htmlFor="age">Age</Label>
+              <Label htmlFor="age">{t('fallcheck.age')}</Label>
               <Input id="age" type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="e.g., 78" />
             </div>
             <div>
-              <Label htmlFor="gait">Gait</Label>
+              <Label htmlFor="gait">{t('fallcheck.gait')}</Label>
               <Select onValueChange={setGait} value={gait}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select gait" />
+                  <SelectValue placeholder={t('fallcheck.selectGait')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="steady">Steady</SelectItem>
@@ -140,39 +140,38 @@ export default function FallCheck() {
               </Select>
             </div>
             <div>
-              <Label htmlFor="history">History (optional)</Label>
-              <Input id="history" value={history} onChange={e => setHistory(e.target.value)} placeholder="e.g., previous falls, medications" />
+              <Label htmlFor="history">{t('fallcheck.history')}</Label>
+              <Input id="history" value={history} onChange={e => setHistory(e.target.value)} placeholder={t('fallcheck.historyPlaceholder')} />
             </div>
             <div className="flex gap-2">
               <Button type="submit" disabled={loading} className="flex-1">
-                {loading ? 'Calculating...' : 'Run Fall Check'}
+                {loading ? t('fallcheck.calculating') : t('fallcheck.runCheck')}
               </Button>
               {residentId && (
                 <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" type="button" disabled={pastChecks.length === 0}>
-                      📋 History ({pastChecks.length})
+                      {t('fallcheck.historyButton', { count: pastChecks.length })}
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>
-                        Previous Fall Checks {selectedResident && `for ${selectedResident.name}`}
+                        {t('fallcheck.historyTitle', { name: selectedResident?.name })}
                       </DialogTitle>
                       <DialogDescription>
-                        History for the selected resident
+                        {t('fallcheck.historyDescription')}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-2 py-2">
                       {pastChecks.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No previous checks.</p>
+                        <p className="text-sm text-muted-foreground">{t('fallcheck.noHistory')}</p>
                       ) : (
                         pastChecks.map(check => (
                           <div key={check.id} className="flex justify-between items-center border-b pb-2">
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <p className="text-sm font-medium">{format(new Date(check.createdAt), 'MMM dd, HH:mm')}</p>
-                                {/* রোগীর নামের ব্যাজ */}
                                 {check.residentName && (
                                   <Badge variant="outline" className="text-red-500 border-red-300 bg-red-50">
                                     {check.residentName}
@@ -185,7 +184,7 @@ export default function FallCheck() {
                             <div className="text-right">
                               <p className="text-sm font-semibold">{(check.confidence * 100).toFixed(0)}%</p>
                               <Badge variant={check.isFall ? 'destructive' : 'default'}>
-                                {check.isFall ? 'High' : 'Low'}
+                                {check.isFall ? t('fallcheck.high') : t('fallcheck.low')}
                               </Badge>
                             </div>
                           </div>
@@ -200,21 +199,20 @@ export default function FallCheck() {
         </CardContent>
       </Card>
 
-      {/* Latest Result */}
       {lastResult && (
         <Card>
           <CardHeader>
-            <CardTitle>Last Check Result</CardTitle>
+            <CardTitle>{t('fallcheck.lastCheckResult')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Risk Score:</span>
+              <span className="text-sm font-medium">{t('fallcheck.riskScore')}:</span>
               <span className="text-lg font-bold">{(lastResult.confidence * 100).toFixed(0)}%</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Verdict:</span>
+              <span className="text-sm font-medium">{t('fallcheck.verdict')}:</span>
               <Badge variant={lastResult.isFall ? 'destructive' : 'default'}>
-                {lastResult.isFall ? '⚠️ HIGH FALL RISK' : '✅ LOW RISK'}
+                {lastResult.isFall ? t('fallcheck.highRisk') : t('fallcheck.lowRisk')}
               </Badge>
             </div>
           </CardContent>

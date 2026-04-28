@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,10 +13,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateResident } from '@/hooks/useResidents';
 
-// Railway PostgreSQL-এ থাকা Organisation-এর ID বসাও
-const ORGANISATION_ID = 'ef59bd9b-807d-4776-80e1-abc123def456'; // <-- এটা তোমার সঠিক ID দিয়ে বদলাও
+const ORGANISATION_ID = 'cf59bd9b-807d-4776-80e1-1d844c5361f9'; // তোমার Organisation ID
 
 export default function AddResidentDialog() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [room, setRoom] = useState('');
@@ -33,41 +34,38 @@ export default function AddResidentDialog() {
       orgId: ORGANISATION_ID,
     });
     setOpen(false);
-    setName('');
-    setRoom('');
-    setAge('');
-    setGait('');
+    setName(''); setRoom(''); setAge(''); setGait('');
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Add Resident</Button>
+        <Button>{t('residents.addResident')}</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add New Resident</DialogTitle>
-          <DialogDescription>Enter the resident details below.</DialogDescription>
+          <DialogTitle>{t('residents.dialogTitle')}</DialogTitle>
+          <DialogDescription>{t('residents.dialogDescription')}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div>
-            <Label htmlFor="name">Name *</Label>
+            <Label htmlFor="name">{t('residents.name')}</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           <div>
-            <Label htmlFor="room">Room</Label>
+            <Label htmlFor="room">{t('residents.room')}</Label>
             <Input id="room" value={room} onChange={(e) => setRoom(e.target.value)} />
           </div>
           <div>
-            <Label htmlFor="age">Age</Label>
+            <Label htmlFor="age">{t('residents.age')}</Label>
             <Input id="age" type="number" value={age} onChange={(e) => setAge(e.target.value)} />
           </div>
           <div>
-            <Label htmlFor="gait">Gait</Label>
+            <Label htmlFor="gait">{t('residents.gait')}</Label>
             <Input id="gait" value={gait} onChange={(e) => setGait(e.target.value)} />
           </div>
           <Button type="submit" disabled={createResident.isPending} className="w-full">
-            {createResident.isPending ? 'Saving...' : 'Save Resident'}
+            {createResident.isPending ? t('residents.saving') : t('residents.save')}
           </Button>
         </form>
       </DialogContent>
