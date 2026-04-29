@@ -27,18 +27,19 @@ model Profile {
 }
 
 model Resident {
-  id        String   @id @default(uuid())
-  orgId     String   @map("org_id")
-  name      String
-  room      String?
-  age       Int?
-  gait      String?
-  notes     String?
-  createdAt DateTime @default(now()) @map("created_at")
-  org       Organisation @relation(fields: [orgId], references: [id])
-  vitals    Vital[]
-  fallChecks FallCheck[]
-  alerts    Alert[]
+  id            String             @id @default(uuid())
+  orgId         String             @map("org_id")
+  name          String
+  room          String?
+  age           Int?
+  gait          String?
+  notes         String?
+  createdAt     DateTime           @default(now()) @map("created_at")
+  org           Organisation       @relation(fields: [orgId], references: [id])
+  vitals        Vital[]
+  fallChecks    FallCheck[]
+  alerts        Alert[]
+  predictions   HealthPrediction[]
   @@map("residents")
 }
 
@@ -70,14 +71,32 @@ model FallCheck {
 }
 
 model Alert {
-  id          String   @id @default(uuid())
-  orgId       String   @map("org_id")
-  residentId  String?  @map("resident_id")
+  id          String    @id @default(uuid())
+  orgId       String    @map("org_id")
+  residentId  String?   @map("resident_id")
   type        String
   severity    String?
-  isOpen      Boolean  @default(true) @map("is_open")
+  isOpen      Boolean   @default(true) @map("is_open")
   metadata    Json?
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
   resident    Resident? @relation(fields: [residentId], references: [id])
   @@map("alerts")
+}
+
+model HealthPrediction {
+  id          String    @id @default(uuid())
+  residentId  String    @map("resident_id")
+  date        DateTime  @default(now())
+  riskScore   Float     @map("risk_score")
+  heartRate   Int?
+  temperature Float?
+  systolic    Int?
+  diastolic   Int?
+  spo2        Int?
+  fallRisk    Float?    @map("fall_risk")
+  summary     String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  resident    Resident  @relation(fields: [residentId], references: [id])
+
+  @@map("health_predictions")
 }

@@ -7,6 +7,7 @@ import Residents from './pages/Residents';
 import Vitals from './pages/Vitals';
 import Alerts from './pages/Alerts';
 import FallCheck from './pages/FallCheck';
+import HealthTimeline from './pages/HealthTimeline'; // নতুন
 
 function App() {
   return (
@@ -35,6 +36,10 @@ function App() {
         <Route
           path="/fall-check"
           element={<><SignedIn><FallCheck /></SignedIn><SignedOut><RedirectToSignIn /></SignedOut></>}
+        />
+        <Route
+          path="/health-timeline"
+          element={<><SignedIn><HealthTimeline /></SignedIn><SignedOut><RedirectToSignIn /></SignedOut></>}
         />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

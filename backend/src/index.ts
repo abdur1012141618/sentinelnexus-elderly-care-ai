@@ -293,5 +293,131 @@ Example output: {"score":0.65,"verdict":"HIGH","explanation":"High risk due to a
   }
 });
 
+// --- Health Prediction Endpoints ---
+app.post('/api/predict-health/:residentId', async (req, res) => {
+  const { residentId } = req.params;
+  
+  try {
+    const resident = await prisma.resident.findUnique({
+      where: { id: residentId },
+      include: {
+        vitals: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        fallChecks: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+    });
+
+    if (!resident) {
+      return res.status(404).json({ error: 'Resident not found' });
+    }
+
+    let baseRisk = 0;
+    
+    if (resident.age) {
+      if (resident.age >= 85) baseRisk += 0.3;
+      else if (resident.age >= 75) baseRisk += 0.2;
+      else if (resident.age >= 65) baseRisk += 0.1;
+    }
+    
+    const recentVitals = resident.vitals || [];
+    if (recentVitals.length >= 2) {
+      const latest = recentVitals[0];
+      const previous = recentVitals[1];
+      
+      if (latest.heartRate && previous.heartRate) {
+        const hrTrend = latest.heartRate - previous.heartRate;
+        if (Math.abs(hrTrend) > 15) baseRisk += 0.15;
+      }
+      
+      if (latest.systolic && previous.systolic) {
+        const bpTrend = latest.systolic - previous.systolic;
+        if (Math.abs(bpTrend) > 20) baseRisk += 0.2;
+      }
+      
+      if (latest.spo2 && previous.spo2) {
+        const spo2Trend = latest.spo2 - previous.spo2;
+        if (spo2Trend < -3) baseRisk += 0.25;
+      }
+    }
+    
+    const fallHistory = resident.fallChecks || [];
+    const recentFalls = fallHistory.filter(f => f.isFall).length;
+    if (recentFalls >= 3) baseRisk += 0.3;
+    else if (recentFalls >= 1) baseRisk += 0.15;
+    
+    const riskScore = Math.min(baseRisk, 1);
+    
+    const predictions = [];
+    const today = new Date();
+    const latest = recentVitals[0] || {};
+    
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() + i);
+      
+      const dayFactor = 1 + (i * 0.01);
+      
+      predictions.push({
+        day: i + 1,
+        date: date.toISOString().split('T')[0],
+        predictedHeartRate: latest.heartRate ? Math.round(latest.heartRate * dayFactor) : null,
+        predictedTemperature: latest.temperature ? parseFloat((latest.temperature * dayFactor).toFixed(1)) : null,
+        predictedSystolic: latest.systolic ? Math.round(latest.systolic * dayFactor) : null,
+        predictedDiastolic: latest.diastolic ? Math.round(latest.diastolic * dayFactor) : null,
+        predictedSpo2: latest.spo2 ? Math.max(85, Math.round(latest.spo2 / dayFactor)) : null,
+        riskLevel: parseFloat((riskScore * dayFactor).toFixed(2)),
+      });
+    }
+
+    const saved = await prisma.healthPrediction.create({
+      data: {
+        residentId,
+        riskScore,
+        heartRate: recentVitals[0]?.heartRate || null,
+        temperature: recentVitals[0]?.temperature || null,
+        systolic: recentVitals[0]?.systolic || null,
+        diastolic: recentVitals[0]?.diastolic || null,
+        spo2: recentVitals[0]?.spo2 || null,
+        fallRisk: riskScore,
+        summary: JSON.stringify(predictions.slice(0, 7)),
+      },
+    });
+
+    res.json({
+      prediction: saved,
+      timeline: predictions,
+      resident: {
+        id: resident.id,
+        name: resident.name,
+        age: resident.age,
+        room: resident.room,
+      },
+    });
+  } catch (error) {
+    console.error('Health prediction failed:', error);
+    res.status(500).json({ error: 'Failed to generate health prediction' });
+  }
+});
+
+app.get('/api/predict-health/:residentId', async (req, res) => {
+  const { residentId } = req.params;
+  try {
+    const predictions = await prisma.healthPrediction.findMany({
+      where: { residentId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
+    res.json(predictions);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch predictions' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
