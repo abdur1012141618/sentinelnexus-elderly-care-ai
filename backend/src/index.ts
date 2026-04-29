@@ -398,9 +398,10 @@ app.post('/api/predict-health/:residentId', async (req, res) => {
         room: resident.room,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Health prediction failed:', error);
-    res.status(500).json({ error: 'Failed to generate health prediction' });
+    const message = error?.message || error?.toString() || 'Unknown error';
+    res.status(500).json({ error: 'Failed to generate health prediction', detail: message });
   }
 });
 
