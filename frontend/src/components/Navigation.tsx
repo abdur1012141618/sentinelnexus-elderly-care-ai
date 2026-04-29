@@ -15,6 +15,7 @@ export default function Navigation() {
         <Link to="/residents"><Button variant="ghost" size="sm">Residents</Button></Link>
         <Link to="/vitals"><Button variant="ghost" size="sm">Vitals</Button></Link>
         <Link to="/fall-check"><Button variant="ghost" size="sm">Fall Check</Button></Link>
+        <Link to="/health-timeline"><Button variant="ghost" size="sm">🧬 Digital Twin</Button></Link>
         <Link to="/alerts">
           <Button variant={openCount > 0 ? 'destructive' : 'ghost'} size="sm">
             🚨 {openCount}
